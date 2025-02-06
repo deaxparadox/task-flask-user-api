@@ -4,6 +4,7 @@ from flask import (
     redirect, url_for, 
     render_template, session
 )
+from flask_jwt_extended import JWTManager
 from sqlalchemy import text
 from dotenv import load_dotenv
 from .routes import index
@@ -11,6 +12,7 @@ from .routes import index
 load_dotenv()
 
 from . import settings
+from .models.user import User
 from .routes import auth_user
 from .database import db_session, init_db
 
@@ -39,6 +41,18 @@ def create_app(test_config=None):
     except OSError:
         pass
     
+    app.config["JWT_SECRET_KEY"] = settings.JWT_SECRET_KEY
+    jwt = JWTManager(app)
+    
+    
+    @jwt.user_identity_loader
+    def user_identity_lookup(user):
+        return user.id
+    
+    @jwt.user_lookup_loader
+    def user_lookup_callback(_jwt_header, jwt_data):
+        identity = jwt_data["sub"]
+        return User.query.filter(User.id == identity).one_or_none()
 
     app.register_blueprint(index.bp)
     app.register_blueprint(auth_user.bp)

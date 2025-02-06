@@ -1,4 +1,5 @@
 import os
+from flask_jwt_extended import JWTManager
 
 SECRET_KEY = os.environ.get("SECRET_KEY")
 USERNAME = os.environ.get("USERNAME")
@@ -10,3 +11,5 @@ PORT = os.environ.get("PORT")
 DATABASE_URL = f'mysql+pymysql://{USERNAME}:{PASSWORD}@{HOST}:{PORT}/{DBNAME}'
 
 ENCODING = os.environ.get("ENCODING")
+
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
