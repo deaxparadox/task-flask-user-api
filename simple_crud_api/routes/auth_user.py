@@ -72,21 +72,13 @@ class RegisterView(MethodView):
         
         return jsonify(message="User created successfully"), 201
     
-    
-class SignInView(MethodView):
-    init_every_request = False
-    
-    def __init__(self, model):
-        self.model: User = model
-
-    def post(self):
-        ...
 
 
 
-def register_api(app: Blueprint, model: User, name: str):
-    app.add_url_rule(f'/{name}', view_func=RegisterView.as_view(f"user-{name}", model))
+
+def register_api(app: Blueprint, model: User, name: str, view_class=None):
+    app.add_url_rule(f'/{name}', view_func=view_class.as_view(f"user-{name}", model))
     
         
 
-register_api(bp, User, 'register')
+register_api(bp, User, 'register', RegisterView)

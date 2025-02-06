@@ -5,7 +5,6 @@ from sqlalchemy import (
     Enum,   
     Integer, 
     String,
-    ForeignKey
 )
 
 from sqlalchemy.orm import relationship
