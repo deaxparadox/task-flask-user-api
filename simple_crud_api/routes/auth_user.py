@@ -15,9 +15,15 @@ from flask_jwt_extended import (
 from simple_crud_api.database import db_session
 from ..models.user import User
 from ..models.address import Address
-from ..serializer import UserRegisterSerializer, UserLoginSerializer
+from ..serializer import (
+    UserRegisterSerializer, 
+    UserLoginSerializer,
+    UserProfileSerializer
+)
 
 from ..utils.user import UserType
+from ..utils.message import message_collector
+from ..utils.models import get_fields
 
 bp = Blueprint("auth_user", __name__, url_prefix="/api/user")
 
@@ -80,7 +86,7 @@ class RegisterView(MethodView):
 class LoginView(MethodView):
     def __init__(self, model):
         self.model = model
-    
+        
     def post(self):
         
         try:
@@ -107,3 +113,71 @@ def register_api(app: Blueprint, model: User, name: str, view_class=None):
 
 register_api(bp, User, 'register', RegisterView)
 register_api(bp, User, 'login', LoginView)
+
+
+@bp.route("", methods=["GET"])
+@jwt_required()
+def user_detail_view():
+    return jsonify(details=current_user.as_dict())
+
+
+
+
+@bp.route("/profile", methods=["POST"])
+@jwt_required()
+def update_profile():
+    """
+    All the fields are required for profile endpoints.
+    
+    All non-optional fields are required from User and Address models.
+    """
+    messages = message_collector(only_list=True)
+    try:
+        serializer = UserProfileSerializer(**request.json)
+    except (AttributeError, TypeError) as e:
+        messages("Invalid user details")
+        messages(str(e))
+        return jsonify(message=messages()), 400
+    
+    # removed address
+    address_details = serializer.address
+    print(f"\n\n{address_details}\n\n")
+    
+    # return error if any of the fields is None
+    keys: list = list(serializer.__dict__.keys())
+    keys.remove("address")
+    for k in keys:
+        value = getattr(serializer, k, None)
+        if value is None:
+            messages("All fields are required. Fields (%s)" % ', '.join([k for k in keys]))
+            return jsonify(message=messages()), 400
+        setattr(current_user, k, value)
+        
+    db_session.add(current_user)
+    db_session.commit()
+    
+    # update details
+    if address_details:
+        address_fields = get_fields(Address)
+        for x in ['id', "user_id"]:
+            address_fields.remove(x)
+        try:
+            address = Address(
+                line1=address_details['line1'],
+                city=address_details['city'],
+                state=address_details['state'],
+                country=address_details['country'],
+                pincode=address_details['pincode']
+            )
+        except Exception as e:
+            messages("required fields in addesss (%s)" % ", ".join(address_fields))
+            return jsonify(message=messages()), 400
+        address.user_id = current_user.id
+        db_session.add(address)
+        db_session.commit()
+    
+    # build response
+    data = current_user.as_dict()
+    if address_details:
+        data['address'] = address.to_dict()
+    return jsonify(details=data), 202
