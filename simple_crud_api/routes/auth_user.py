@@ -94,6 +94,9 @@ class LoginView(MethodView):
         if not user or not user.active:
             return jsonify(message="User not found"), 404
         
+        if not user.check_password(serializer.password):
+            return jsonify(message="Invalid username and password"), 400
+        
         access_token = create_access_token(identity=user)
         return jsonify({"access_token": access_token}), 200
 

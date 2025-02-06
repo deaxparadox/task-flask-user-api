@@ -39,13 +39,11 @@ class User(Base):
         self.username = username
         self.password = password
     
-    @classmethod
-    def set_password(cls, raw_passwrod: str) -> None:
-        cls.password = generate_hashed_password(raw_passwrod)
+    def set_password(self, raw_passwrod: str) -> None:
+        self.password = generate_hashed_password(raw_passwrod)
         
-    @classmethod
-    def check_password(cls, raw_password: str) -> bool:
-        return check_password(raw_password, cls.password)
+    def check_password(self, raw_password: str) -> bool:
+        return check_password(raw_password, self.password)
     
     @staticmethod
     def make_passsword(raw_password: str) -> str:
