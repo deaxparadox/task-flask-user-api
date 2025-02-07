@@ -1,6 +1,6 @@
 
 
-def message_collect(only_list: bool = False):
+def message_collector(only_list: bool = False):
     """
     Message collector for collect jsonify the response message.
     
