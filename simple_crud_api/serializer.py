@@ -28,3 +28,23 @@ class UserProfileSerializer:
     phone: int
     username: str
     address: AddressSerializer | None = None
+    
+    
+
+
+@dataclass
+class AddressUpdateSerializer:
+    line1: str | None = None
+    line2: str | None = None
+    city: str | None = None
+    state: str | None = None
+    country: str | None = None
+    pincode: str | None = None
+@dataclass
+
+class UserUpdateSerializer:
+    first_name: str | None = None
+    last_name: str | None = None
+    email: str | None = None
+    phone: int | None = None
+    username: str | None = None

@@ -16,6 +16,15 @@ class Address(Base):
     user_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
     user = relationship("User", back_populates="address")
     
+    def get_reqired_fields(self):
+        fields = self.get_fields()
+        for x in ['id', 'user_id', 'line2']:
+            fields.remove(x)
+        return fields
+    
+    def get_optional_fields(self):
+        return ['line2']
+    
     def get_fields(self):
         return [c.name for c in self.__table__.columns]
     

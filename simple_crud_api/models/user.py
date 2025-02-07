@@ -49,7 +49,7 @@ class User(Base):
     def make_passsword(raw_password: str) -> str:
         return generate_hashed_password(raw_password)
     
-    def as_dict(self):
+    def to_dict(self):
         data = {c.name: getattr(self, c.name) for c in self.__table__.columns}
         for key in ['password', 'active', 'id']:
             del data[key]
