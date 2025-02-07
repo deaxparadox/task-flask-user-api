@@ -29,8 +29,6 @@ from ..utils.validation import phone_number_validation
 
 bp = Blueprint("auth_user", __name__, url_prefix="/api/user")
 
-
-
 @bp.route("", methods=["GET"])
 @jwt_required()
 def user_detail_view():
@@ -158,28 +156,33 @@ class UpdateView(MethodView):
         
         user_data: dict | None = request.json
         
-        if self.empty_user_data(user_data):
-            return jsonify(message="Invalid request data"), 400
-        
         try:
-            address_data: dict | None = user_data.get("address", None)
+            address_data: dict | None = user_data.pop("address", None)
+            # print(address_data, user_data)
             if address_data:
                 self.address = True
-                user_data.pop("address")
+            
+            address_serializer = None
+            user_serializer = None
+            
+            if address_data:
                 address_serializer = AddressUpdateSerializer(**address_data)
-                
-            if self.empty_user_data(user_data):
-                user_serializer = None
-            else:
-                user_serializer = UserUpdateSerializer(**user_data)
+
+            user_serializer = UserUpdateSerializer(**user_data)
+        
         except Exception as e:
             self.mc(str(e))
             return jsonify(message=self.mc()), 400
         
+        # check for empty request data
+        print(user_data, address_data)
+        if self.empty_user_data(user_data) and self.empty_user_data(address_data):
+            return jsonify(message="Invalid request data"), 400
         
         # phone number validation
-        if not phone_number_validation(user_serializer.phone):
-            return jsonify(message='Invalid phone number'), 400
+        if user_serializer:
+            if user_serializer.phone and not phone_number_validation(user_serializer.phone):
+                return jsonify(message='Invalid phone number'), 400
         
         if self.address:
             address_query = db_session.query(Address).filter_by(user_id=current_user.id).one_or_none()

@@ -26,7 +26,6 @@ class UserProfileSerializer:
     last_name: str
     email: str
     phone: int
-    username: str
     address: AddressSerializer | None = None
     
     

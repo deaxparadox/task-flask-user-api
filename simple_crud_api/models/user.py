@@ -6,7 +6,6 @@ from sqlalchemy import (
     Integer, 
     String,
 )
-
 from sqlalchemy.orm import relationship
 from simple_crud_api.database import Base
 
@@ -26,6 +25,9 @@ class User(Base):
     role = Column(Enum(UserType), default=UserType.Employee)
     email = Column(String(120), nullable=True)
     phone = Column(BigInteger, nullable=True)
+    
+    account_activation = Column(Boolean, default=False, nullable=True)
+    account_activation_id = Column(String(36), nullable=True)
     
     address = relationship(
         "Address", 
@@ -51,7 +53,7 @@ class User(Base):
     
     def to_dict(self):
         data = {c.name: getattr(self, c.name) for c in self.__table__.columns}
-        for key in ['password', 'active', 'id']:
+        for key in ['password', 'active', 'id', 'account_activation', 'account_activation_id']:
             del data[key]
         data['role'] = self.role.value
         return data
