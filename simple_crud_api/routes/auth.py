@@ -197,6 +197,7 @@ def reset_unknown_user_password():
     
     try:
         user = db_session.query(User).filter_by(email=email).one_or_none()
+        print(f"\n\n{user}\n\n")
     except Exception as e:
         # multiple email association
         return jsonify(message=str(e)), 400
@@ -212,7 +213,7 @@ def reset_unknown_user_password():
         
         link = f"Click on the following link to update password: /api/auth/password-reset-unknown/{validation.id}"
 
-        jsonify(
+        return jsonify(
             message=link
         ), 202
         
@@ -222,9 +223,10 @@ def reset_unknown_user_password():
 
 @bp.post("/password-reset-unknown/<val_id>")
 def reset_password_using_validation_id(val_id: str):
+    
     try:
-        validation: Validation = db_session.query(Validation).get(id=val_id)
-        if not validation:
+        validation: Validation = db_session.query(Validation).get({"id":val_id})
+        if not validation or not validation.active:
             raise ValueError("Invalid validation ID")
         
         password = request.json.get("password")
@@ -232,11 +234,21 @@ def reset_password_using_validation_id(val_id: str):
         if not pass_valid[0]:
             return jsonify(message=pass_valid[1]), 400
         
-        user: User = db_session.query(User).get(id=validation.get_user_id)
+        user: User = db_session.query(User).get({"id":validation.get_user_id})
         user.password = User.make_passsword(password)
         
+        db_session.add(user)
+        db_session.commit()
+        
+        validation.active = False
+        db_session.add(validation)
+        db_session.commit()
+        
     except Exception as e:
-        return jsonify(message="Invalid link"), 400
+        return jsonify(message=[
+            "Invalid link",
+            str(e)
+        ]), 400
     
     return jsonify(message="Password reset successfully"), 202
 
