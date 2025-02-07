@@ -11,7 +11,8 @@ from flask_jwt_extended import (
     get_jwt_identity,
     create_access_token,
     create_refresh_token,
-    jwt_required
+    jwt_required,
+    current_user
 )
 
 from ..serializer import (
@@ -21,7 +22,10 @@ from ..serializer import (
 from ..utils.user import UserType
 from ..database import db_session
 from ..models.user import User
+from ..models.address import Address
+from ..models.validation import Validation
 from ..utils.message import message_collector
+from ..utils.validation import password_validation
 
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -157,3 +161,82 @@ def refresh_token():
     access_token = create_access_token(identity=user, fresh=False)
     
     return jsonify(access_token=access_token)
+
+
+@bp.post("/password-reset")
+@jwt_required(fresh=True)
+def reset_logged_user_password():
+    """
+    Reset the password of logged in user.
+    """
+    
+    try:
+        password = request.json.get("password")
+    except (AttributeError, TypeError) as e:
+        return jsonify(message=str(e)), 400
+    
+    if len(password) < 8:
+        return jsonify(message="Password must be atleast 8 digits"), 400
+    
+    current_user.password = User.make_passsword(password)
+    db_session.add(current_user)
+    db_session.commit()
+    
+    return jsonify(message="Password changed successfully")
+    
+    
+@bp.post("/password-reset-unknown")
+def reset_unknown_user_password():
+    """
+    Reset password of unknown user. Email required.
+    """
+    try:
+        email = request.json.get("email")
+    except (AttributeError, TypeError) as e:
+        return jsonify(message=str(e)), 400
+    
+    try:
+        user = db_session.query(User).filter_by(email=email).one_or_none()
+    except Exception as e:
+        # multiple email association
+        return jsonify(message=str(e)), 400
+    
+    # user with email found
+    if user:
+        validation = Validation(
+            id = uuid4(),
+            user_id=user.id
+        )
+        db_session.add(validation)
+        db_session.commit()
+        
+        link = f"Click on the following link to update password: /api/auth/password-reset-unknown/{validation.id}"
+
+        jsonify(
+            message=link
+        ), 202
+        
+    # email not found
+    return jsonify(message="User not found"), 400
+
+
+@bp.post("/password-reset-unknown/<val_id>")
+def reset_password_using_validation_id(val_id: str):
+    try:
+        validation: Validation = db_session.query(Validation).get(id=val_id)
+        if not validation:
+            raise ValueError("Invalid validation ID")
+        
+        password = request.json.get("password")
+        pass_valid = password_validation(password)
+        if not pass_valid[0]:
+            return jsonify(message=pass_valid[1]), 400
+        
+        user: User = db_session.query(User).get(id=validation.get_user_id)
+        user.password = User.make_passsword(password)
+        
+    except Exception as e:
+        return jsonify(message="Invalid link"), 400
+    
+    return jsonify(message="Password reset successfully"), 202
+

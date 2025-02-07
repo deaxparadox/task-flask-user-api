@@ -154,6 +154,11 @@ class UpdateView(MethodView):
     @jwt_required(fresh=True)
     def post(self):
         
+        # If the user have not updated the profile.
+        # then return a response to update the profile.
+        if current_user.email is None:
+            return jsonify(message="Update your profile"), 401
+        
         user_data: dict | None = request.json
         
         try:

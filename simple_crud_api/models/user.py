@@ -36,6 +36,13 @@ class User(Base):
         passive_deletes=True,
         back_populates="user"
     )
+    validation = relationship(
+        "Validation", 
+        uselist=False,
+        cascade="save-update",
+        passive_deletes=True,
+        back_populates="user"
+    )
     
     def __init__(self, username, password):
         self.username = username
