@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from uuid import uuid4
+from importlib import import_module
 
 from flask import (
     Blueprint,
@@ -24,7 +25,8 @@ from ..utils import (
     account_activation_link, 
     password_reset_link,
     encode_string,
-    decode_string
+    decode_string,
+    account_activation_otp
 )
 from ..utils.user import UserType
 from ..database import db_session
@@ -38,10 +40,10 @@ from ..utils.mail import (
     send_account_activation_mail,
     send_password_reset_mail
 )
+from ..cache import cache
 
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
-
 
 class RegisterView(MethodView):
     
@@ -67,7 +69,25 @@ class RegisterView(MethodView):
             return UserType.Manager
         return 0
     
+    default_opt = "123432"
+    
+    def otp(self, user: User):
+        
+        # set otp in cache
+        cache.set(f"{user.username}_otp", self.default_opt)
+        
+        mail_message = f"You OTP for activating the account is: {self.default_opt}"
+        if send_account_activation_mail(user.email, mail_message):
+            self.mc("OTP has been sent the your email address")
+        else:
+            self.mc("Unable to send email contact administrator")
+        
+        return jsonify(message=self.mc()), 201
+    
     def post(self):
+        opt = request.args.get("opt")
+        
+        
         try:
             serializer = UserRegisterSerializer(**request.json)
         except (AttributeError, TypeError) as e:
@@ -105,6 +125,9 @@ class RegisterView(MethodView):
         
         self.mc("User created successfully")
         
+        if opt == "yes":
+            return self.otp(user)
+        
         mail_message = (
             "Click on the following link to activate the account:" +
             account_activation_link(request, user)
@@ -120,11 +143,32 @@ class RegisterView(MethodView):
 
 class AccountActivateView(MethodView):
     def get(self, user_id, act_id):
-        user = db_session.query(User).filter_by(id=user_id).one_or_none()
+        user = db_session.query(User).filter_by(id=user_id, account_activation_id=act_id).one_or_none()
+        if not user:
+            return jsonify(message="Invalid user and activation ID"), 400
         user.account_activation = True
         db_session.add(user)
         db_session.commit()
         return jsonify(message="User account successfully activated")
+
+class AccountActivateOTPView(MethodView):
+    def post(self):
+        username = request.json.get('username')
+        user_otp = request.json.get("otp")
+        
+        if not username or not user_otp:
+            return jsonify(message="Required username and otp"), 200
+        
+        otp = cache.get(f"{username}_otp")
+        
+        if not otp:
+            return jsonify(message="OTP not found, user account already activated.")
+        
+        if otp == user_otp:
+            cache.delete(f"{username}_otp")
+            return jsonify(message="User successfully activated"), 200
+        
+        return jsonify(message="Incorrect OTP"), 400
 
 class LoginView(MethodView):
     def __init__(self, model):
@@ -169,6 +213,7 @@ def register_api(app: Blueprint, model: User, name: str, view_class=None):
 # Method views register
 register_api(bp, User, 'register', RegisterView)
 register_api(bp, User, 'login', LoginView)
+bp.add_url_rule("/otp", view_func=AccountActivateOTPView.as_view("user-activation-otp"))
 bp.add_url_rule("/register/<int:user_id>/<act_id>", view_func=AccountActivateView.as_view("user-activation"))
 
 

@@ -1,7 +1,12 @@
+from importlib import import_module
+
 from flask import (
     Blueprint,
     jsonify
 )
+
+from ..cache import cache
+
 
 bp = Blueprint("index", __name__, url_prefix="/")
 
