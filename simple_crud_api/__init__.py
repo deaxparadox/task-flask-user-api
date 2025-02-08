@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from flask import (
     Flask, g, 
     redirect, url_for, 
@@ -7,14 +8,14 @@ from flask import (
 from flask_jwt_extended import JWTManager
 from sqlalchemy import text
 from dotenv import load_dotenv
-from .routes import index
 
 load_dotenv()
 
 from . import settings
 from .models.user import User
-from .routes import auth_user
+from .routes import auth_user, auth, index
 from .database import db_session, init_db
+from . import settings
 
 
 # app factory function
@@ -42,6 +43,12 @@ def create_app(test_config=None):
         pass
     
     app.config["JWT_SECRET_KEY"] = settings.JWT_SECRET_KEY
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(
+        minutes=int(settings.JWT_ACCESS_TOKEN_EXPIRES)
+    )
+    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(
+        days=int(settings.JWT_REFRESH_TOKEN_EXPIRES)
+    )
     jwt = JWTManager(app)
     
     
@@ -52,10 +59,11 @@ def create_app(test_config=None):
     @jwt.user_lookup_loader
     def user_lookup_callback(_jwt_header, jwt_data):
         identity = jwt_data["sub"]
-        return User.query.filter(User.id == identity).one_or_none()
+        return db_session.query(User).filter_by(id=identity).one_or_none()
 
     app.register_blueprint(index.bp)
     app.register_blueprint(auth_user.bp)
+    app.register_blueprint(auth.bp)
 
     @app.teardown_appcontext
     def shutdown_session(exception=None):

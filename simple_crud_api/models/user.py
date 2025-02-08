@@ -6,7 +6,6 @@ from sqlalchemy import (
     Integer, 
     String,
 )
-
 from sqlalchemy.orm import relationship
 from simple_crud_api.database import Base
 
@@ -27,8 +26,18 @@ class User(Base):
     email = Column(String(120), nullable=True)
     phone = Column(BigInteger, nullable=True)
     
+    account_activation = Column(Boolean, default=False, nullable=True)
+    account_activation_id = Column(String(36), nullable=True)
+    
     address = relationship(
         "Address", 
+        uselist=False,
+        cascade="save-update",
+        passive_deletes=True,
+        back_populates="user"
+    )
+    validation = relationship(
+        "Validation", 
         uselist=False,
         cascade="save-update",
         passive_deletes=True,
@@ -49,9 +58,9 @@ class User(Base):
     def make_passsword(raw_password: str) -> str:
         return generate_hashed_password(raw_password)
     
-    def as_dict(self):
+    def to_dict(self):
         data = {c.name: getattr(self, c.name) for c in self.__table__.columns}
-        for key in ['password', 'active', 'id']:
+        for key in ['password', 'active', 'id', 'account_activation', 'account_activation_id']:
             del data[key]
         data['role'] = self.role.value
         return data
