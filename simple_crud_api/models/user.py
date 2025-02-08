@@ -44,9 +44,10 @@ class User(Base):
         back_populates="user"
     )
     
-    def __init__(self, username, password):
+    def __init__(self, username, password, email):
         self.username = username
         self.password = password
+        self.email = email
     
     def set_password(self, raw_passwrod: str) -> None:
         self.password = generate_hashed_password(raw_passwrod)

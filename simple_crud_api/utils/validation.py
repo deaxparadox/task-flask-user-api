@@ -15,20 +15,18 @@ def phone_number_validation(num: Any) -> bool:
 
 def password_validation(raw_password: str) -> Tuple[bool, str]:
     invalid_message = False, (
-        "Password must be atleast 8 characters"
-        "and should be alphanumeric, not special chracter are allowed"
+        "Password must be atleast 8 characters and atmost 20 characters"
+        "and should also include alphanumeric, not special chracter are allowed"
     )
     
-    if len(raw_password) < 8:
+    if len(raw_password) < 8 or len(raw_password) > 20:
         return invalid_message
     
-    # num_collect = []
-    # for c in raw_password:
-    #     if c not in ascii_letters:
-    #         num_collect.append(c)
-    #     if c in 
-    # for c in digits:
-    #     if c not in digits:
-    #         return invalid_message
-        
+    if (
+        not any(c.isdigit() for c in raw_password) or 
+        not any(c.isupper() for c in raw_password) or
+        not any(c.islower() for c in raw_password)  
+    ):
+        return invalid_message
+    
     return True, "Successfull password"
