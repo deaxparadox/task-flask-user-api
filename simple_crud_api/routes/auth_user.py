@@ -7,11 +7,8 @@ from flask import (
 )
 from flask.views import MethodView
 from flask_jwt_extended import (
-    create_access_token,
-    create_refresh_token,
     current_user,
     jwt_required,
-    get_jwt_identity,
 )
 
 from simple_crud_api.database import db_session
@@ -26,6 +23,10 @@ from ..serializer import (
 from ..utils.message import message_collector
 from ..utils.models import get_fields
 from ..utils.validation import phone_number_validation
+from ..utils.mail import (
+    check_mail_exists,
+    check_phone_exists
+)
 
 bp = Blueprint("auth_user", __name__, url_prefix="/api/user")
 
@@ -57,7 +58,7 @@ def update_profile():
     
     
     # one-time profile update
-    if current_user.email != None:
+    if current_user.phone != None and current_user.first_name != None and current_user.last_name != None:
         messages("Profile already updated")
         messages("To update user details, please visited the update endpoint.")
         return jsonify(message=messages()), 200
@@ -72,6 +73,8 @@ def update_profile():
     # phone number validation
     if not phone_number_validation(serializer.phone):
         return jsonify(message="Enter a valid phone number")
+    if check_phone_exists(serializer.phone):
+        return jsonify(message="Phone number already in use.")
     
     # removed address from serializer
     address_details = serializer.address
@@ -79,6 +82,8 @@ def update_profile():
     # return error if any of the fields is None
     keys: list = list(serializer.__dict__.keys())
     keys.remove("address")
+    
+    # Update user details
     for k in keys:
         value = getattr(serializer, k, None)
         if value is None:
@@ -102,6 +107,7 @@ def update_profile():
         for x in ['id', "user_id"]:
             address_fields.remove(x)
         try:
+            # address exists
             if isinstance(address, Address):
                 address.line1=address_details['line1']
                 address.city=address_details['city']
@@ -109,6 +115,7 @@ def update_profile():
                 address.country=address_details['country']
                 address.pincode=address_details['pincode']
             else:
+                # address not exists
                 address = Address(
                     line1=address_details['line1'],
                     city=address_details['city'],
@@ -136,7 +143,7 @@ def update_profile():
 
 class UpdateView(MethodView):
     """
-    partial update
+    Partial update
     """
     
     def __init__(self):
@@ -180,14 +187,19 @@ class UpdateView(MethodView):
             return jsonify(message=self.mc()), 400
         
         # check for empty request data
-        print(user_data, address_data)
         if self.empty_user_data(user_data) and self.empty_user_data(address_data):
             return jsonify(message="Invalid request data"), 400
         
         # phone number validation
+        # email existence
         if user_serializer:
-            if user_serializer.phone and not phone_number_validation(user_serializer.phone):
-                return jsonify(message='Invalid phone number'), 400
+            if user_serializer.email and check_mail_exists(user_serializer.email):
+                return jsonify(message="Email already existss"), 302
+            if user_serializer.phone:
+                if not phone_number_validation(user_serializer.phone):
+                    return jsonify(message='Invalid phone number'), 400
+                if check_phone_exists(user_serializer.phone):
+                    return jsonify(message="Phone number already exists"), 302
         
         if self.address:
             address_query = db_session.query(Address).filter_by(user_id=current_user.id).one_or_none()

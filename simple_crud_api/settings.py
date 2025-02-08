@@ -15,3 +15,12 @@ ENCODING = os.environ.get("ENCODING")
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
 JWT_ACCESS_TOKEN_EXPIRES = os.environ.get("JWT_ACCESS_TOKEN_EXPIRES")
 JWT_REFRESH_TOKEN_EXPIRES = os.environ.get("JWT_REFRESH_TOKEN_EXPIRES")
+
+MAIL_SERVER = os.environ.get('MAIL_SERVER')
+MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
+MAIL_PASSWORD = os.environ.get("TEST_APP")
+MAIL_USE_TLS = False
+MAIL_TLS_PORT = os.environ.get('MAIL_TLS_PORT')
+MAIL_USE_SSL = True
+MAIL_SSL_PORT = os.environ.get('MAIL_SSL_PORT')
+MAIL_DEFAULT_SENDER = os.environ.get("MAIL_USERNAME")

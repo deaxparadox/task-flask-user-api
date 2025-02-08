@@ -10,6 +10,7 @@ class UserRegisterSerializer:
     username: str
     password: str
     role: int
+    email: str
     
 
 @dataclass
@@ -24,7 +25,6 @@ class AddressSerializer:
 class UserProfileSerializer:
     first_name: str
     last_name: str
-    email: str
     phone: int
     address: AddressSerializer | None = None
     
@@ -39,11 +39,16 @@ class AddressUpdateSerializer:
     state: str | None = None
     country: str | None = None
     pincode: str | None = None
-@dataclass
 
+@dataclass
 class UserUpdateSerializer:
     first_name: str | None = None
     last_name: str | None = None
     email: str | None = None
     phone: int | None = None
     username: str | None = None
+    
+@dataclass
+class PRLoggedUserSerailizer:
+    last_password: str
+    new_password: str

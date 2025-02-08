@@ -5,9 +5,11 @@ from flask import (
     redirect, url_for, 
     render_template, session
 )
+from flask_mail import Mail, Message
+from dotenv import load_dotenv
 from flask_jwt_extended import JWTManager
 from sqlalchemy import text
-from dotenv import load_dotenv
+
 
 load_dotenv()
 
@@ -17,6 +19,9 @@ from .routes import auth_user, auth, index
 from .database import db_session, init_db
 from . import settings
 
+
+mail = Mail()
+jwt = JWTManager()
 
 # app factory function
 def create_app(test_config=None):
@@ -42,6 +47,7 @@ def create_app(test_config=None):
     except OSError:
         pass
     
+    # JWT Configuration
     app.config["JWT_SECRET_KEY"] = settings.JWT_SECRET_KEY
     app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(
         minutes=int(settings.JWT_ACCESS_TOKEN_EXPIRES)
@@ -49,7 +55,17 @@ def create_app(test_config=None):
     app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(
         days=int(settings.JWT_REFRESH_TOKEN_EXPIRES)
     )
-    jwt = JWTManager(app)
+    jwt.init_app(app)
+    
+    # Mail server configuration
+    app.config['MAIL_SERVER'] = settings.MAIL_SERVER
+    app.config['MAIL_PORT'] = settings.MAIL_SSL_PORT
+    app.config['MAIL_USE_TLS'] = settings.MAIL_USE_TLS
+    app.config['MAIL_USE_SSL'] = settings.MAIL_USE_SSL
+    app.config['MAIL_USERNAME'] = settings.MAIL_USERNAME
+    app.config['MAIL_PASSWORD'] = settings.MAIL_PASSWORD
+    app.config['MAIL_DEFAULT_SENDER']  = settings.MAIL_DEFAULT_SENDER
+    mail.init_app(app)
     
     
     @jwt.user_identity_loader
