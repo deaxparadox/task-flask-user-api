@@ -20,6 +20,12 @@ from ..serializer import (
     UserLoginSerializer,
     PRLoggedUserSerailizer
 )
+from ..utils import (
+    account_activation_link, 
+    password_reset_link,
+    encode_string,
+    decode_string
+)
 from ..utils.user import UserType
 from ..database import db_session
 from ..models.user import User
@@ -77,8 +83,9 @@ class RegisterView(MethodView):
             return jsonify(message="Email already exists"), 302
         
         # check password length
-        if len(serializer.password) < 8:
-            return jsonify(message="Password must be atleast digit"), 400
+        passwd_status, passwd_message = password_validation(serializer.password)
+        if not passwd_status:
+            return jsonify(message=passwd_message), 400
         
         # check user role
         user_role = self.get_user_type(serializer.role)
@@ -99,10 +106,10 @@ class RegisterView(MethodView):
         self.mc("User created successfully")
         
         mail_message = (
-            "Click on the following link to activate the account:"
-            f"{request.scheme}://{":".join([str(x) for x in request.server])}/api/auth/register/{user.id}/{user.account_activation_id}"
+            "Click on the following link to activate the account:" +
+            account_activation_link(request, user)
         )
-        if send_account_activation_mail(mail_message):
+        if send_account_activation_mail(user.email, mail_message):
             self.mc("Verification email has been sent to your email address ")
         else:
             self.mc("Unable to send email contact administrator")
@@ -159,6 +166,7 @@ def register_api(app: Blueprint, model: User, name: str, view_class=None):
     )
         
 
+# Method views register
 register_api(bp, User, 'register', RegisterView)
 register_api(bp, User, 'login', LoginView)
 bp.add_url_rule("/register/<int:user_id>/<act_id>", view_func=AccountActivateView.as_view("user-activation"))
@@ -172,7 +180,7 @@ def refresh_token():
     """
     identity = get_jwt_identity()
     
-    user = db_session.query(User).filter_by(id=int(identity)).one_or_none()
+    user = db_session.query(User).filter_by(id=int(identity)).filter_by(active=True).one_or_none()
     if not user:
         return jsonify(message="Invalid refresh token"), 401
     
@@ -221,7 +229,7 @@ def reset_unknown_user_password():
         return jsonify(message=str(e)), 400
     
     try:
-        user = db_session.query(User).filter_by(email=email).one_or_none()
+        user = db_session.query(User).filter_by(email=email, active=True).one_or_none()
     except Exception as e:
         # multiple email association
         mc(str(e))
@@ -236,11 +244,13 @@ def reset_unknown_user_password():
         db_session.add(validation)
         db_session.commit()
         
+        encoded_string = encode_string(email=email, validation_id=validation.get_validation_id)
+        
         link =(
-            "Click on the following link to update password:" 
-            f"{request.scheme}://{":".join([str(x) for x in request.server])}/api/auth/password-reset-unknown/{validation.id}"
+            "Click on the following link to update password:" + 
+            password_reset_link(request, encoded_string)
         )
-        if send_password_reset_mail(link):
+        if send_password_reset_mail(user.email, link):
             mc("Password reset link has been sent to your email address ")
         else:
             mc("Unable to send email contact administrator")
@@ -254,15 +264,17 @@ def reset_unknown_user_password():
 
 
 @bp.post("/password-reset-unknown/<val_id>")
-def reset_password_using_validation_id(val_id: str):
-    
+def reset_password_using_validation_id(val_id: str):    
     try:
-        validation: Validation = db_session.query(Validation).get({"id":val_id})
+        
+        decode_data = decode_string(val_id)
+        
+        validation: Validation = db_session.query(Validation).get({"id": decode_data.get("validation_id")})
         if not validation or not validation.active:
             raise ValueError("Invalid validation ID")
         
         password = request.json.get("password")
-        email = request.json.get("email")
+        email = decode_data.get('email')
         if not password or not email:
             return jsonify(message="Invalid email and password details"), 400
         
@@ -293,3 +305,19 @@ def reset_password_using_validation_id(val_id: str):
     
     return jsonify(message="Password reset successfully"), 202
 
+
+
+@bp.delete("/delete")
+@jwt_required(fresh=True)
+def soft_delete_user():
+    """
+    Soft delete a user.
+    """
+    
+    if not current_user.active:
+        return jsonify(message="User already deleted"), 302
+     
+    current_user.active = False
+    db_session.add(current_user)
+    db_session.commit()
+    return jsonify(message=f"User {current_user.username} successfully deleted"), 302
