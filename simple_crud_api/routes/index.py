@@ -4,9 +4,9 @@ from flask import (
     Blueprint,
     jsonify
 )
-from flask_mail import Message
 
-simple_crud_api = import_module("simple_crud_api")
+from ..cache import cache
+
 
 bp = Blueprint("index", __name__, url_prefix="/")
 

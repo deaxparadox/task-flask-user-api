@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from uuid import uuid4
+from importlib import import_module
 
 from flask import (
     Blueprint,
@@ -14,11 +15,20 @@ from flask_jwt_extended import (
     create_refresh_token,
     jwt_required,
 )
+import pyotp
 
+from .. import settings
 from ..serializer import (
     UserRegisterSerializer, 
     UserLoginSerializer,
     PRLoggedUserSerailizer
+)
+from ..utils import (
+    account_activation_link, 
+    password_reset_link,
+    encode_string,
+    decode_string,
+    account_activation_otp
 )
 from ..utils.user import UserType
 from ..database import db_session
@@ -32,10 +42,10 @@ from ..utils.mail import (
     send_account_activation_mail,
     send_password_reset_mail
 )
+from ..cache import cache
 
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
-
 
 class RegisterView(MethodView):
     
@@ -61,7 +71,34 @@ class RegisterView(MethodView):
             return UserType.Manager
         return 0
     
+    default_opt = "123432"
+    
+    def otp(self, user: User):
+        
+        totp = pyotp.TOTP('base32secret3232', interval=int(settings.CACHE_DEFAULT_TIMEOUT))
+        user_otp = totp.now()
+        
+        # set totp instance in cache
+        # send the OTP to user via mail
+        cache.set(f"{user.username}_otp", (user, totp))
+        
+        encoded_data = encode_string(username=user.username)
+        
+        mail_message = (
+            f"Click on the following link to verify the OTP: {account_activation_otp(request, encoded_data)}\n"
+            f"You OTP for activating the account is: {user_otp}"
+        )
+        if send_account_activation_mail(user.email, mail_message):
+            self.mc("OTP has been sent the your email address")
+        else:
+            self.mc("Unable to send email contact administrator")
+        
+        return jsonify(message=self.mc()), 201
+    
     def post(self):
+        opt = request.args.get("opt")
+        
+        
         try:
             serializer = UserRegisterSerializer(**request.json)
         except (AttributeError, TypeError) as e:
@@ -77,8 +114,9 @@ class RegisterView(MethodView):
             return jsonify(message="Email already exists"), 302
         
         # check password length
-        if len(serializer.password) < 8:
-            return jsonify(message="Password must be atleast digit"), 400
+        passwd_status, passwd_message = password_validation(serializer.password)
+        if not passwd_status:
+            return jsonify(message=passwd_message), 400
         
         # check user role
         user_role = self.get_user_type(serializer.role)
@@ -98,11 +136,14 @@ class RegisterView(MethodView):
         
         self.mc("User created successfully")
         
+        if opt == "yes":
+            return self.otp(user)
+        
         mail_message = (
-            "Click on the following link to activate the account:"
-            f"{request.scheme}://{":".join([str(x) for x in request.server])}/api/auth/register/{user.id}/{user.account_activation_id}"
+            "Click on the following link to activate the account:" +
+            account_activation_link(request, user)
         )
-        if send_account_activation_mail(mail_message):
+        if send_account_activation_mail(user.email, mail_message):
             self.mc("Verification email has been sent to your email address ")
         else:
             self.mc("Unable to send email contact administrator")
@@ -113,11 +154,48 @@ class RegisterView(MethodView):
 
 class AccountActivateView(MethodView):
     def get(self, user_id, act_id):
-        user = db_session.query(User).filter_by(id=user_id).one_or_none()
+        user = db_session.query(User).filter_by(id=user_id, account_activation_id=act_id).one_or_none()
+        if not user:
+            return jsonify(message="Invalid user and activation ID"), 400
         user.account_activation = True
         db_session.add(user)
         db_session.commit()
         return jsonify(message="User account successfully activated")
+
+class AccountActivateOTPView(MethodView):
+    def post(self, otp_verify: str):
+        
+        decoded_data = decode_string(otp_verify)
+        username = decoded_data.get('username')
+        
+        # username = request.json.get('username')
+        user_otp = request.json.get("otp")
+        
+        if not username or not user_otp:
+            return jsonify(message="Required username and otp"), 200
+        
+        # get user and totp instance from cache
+        try:
+            cache_get_output = cache.get(f"{username}_otp")
+            user, totp = cache_get_output
+        except Exception as e:
+            return jsonify(message="OTP expired"), 400
+        
+        if not totp:
+            return jsonify(message="OTP not found, user account already activated.")
+        
+        if totp.verify(user_otp):
+            
+            # activating user account
+            user.account_activation = True
+            db_session.add(user)
+            db_session.commit()
+            
+            cache.delete(f"{username}_otp")
+            
+            return jsonify(message="User successfully activated"), 200
+        
+        return jsonify(message="Incorrect OTP"), 400
 
 class LoginView(MethodView):
     def __init__(self, model):
@@ -159,8 +237,10 @@ def register_api(app: Blueprint, model: User, name: str, view_class=None):
     )
         
 
+# Method views register
 register_api(bp, User, 'register', RegisterView)
 register_api(bp, User, 'login', LoginView)
+bp.add_url_rule("/otp/<otp_verify>", view_func=AccountActivateOTPView.as_view("user-activation-otp"))
 bp.add_url_rule("/register/<int:user_id>/<act_id>", view_func=AccountActivateView.as_view("user-activation"))
 
 
@@ -172,7 +252,7 @@ def refresh_token():
     """
     identity = get_jwt_identity()
     
-    user = db_session.query(User).filter_by(id=int(identity)).one_or_none()
+    user = db_session.query(User).filter_by(id=int(identity)).filter_by(active=True).one_or_none()
     if not user:
         return jsonify(message="Invalid refresh token"), 401
     
@@ -221,7 +301,7 @@ def reset_unknown_user_password():
         return jsonify(message=str(e)), 400
     
     try:
-        user = db_session.query(User).filter_by(email=email).one_or_none()
+        user = db_session.query(User).filter_by(email=email, active=True).one_or_none()
     except Exception as e:
         # multiple email association
         mc(str(e))
@@ -236,11 +316,13 @@ def reset_unknown_user_password():
         db_session.add(validation)
         db_session.commit()
         
+        encoded_string = encode_string(email=email, validation_id=validation.get_validation_id)
+        
         link =(
-            "Click on the following link to update password:" 
-            f"{request.scheme}://{":".join([str(x) for x in request.server])}/api/auth/password-reset-unknown/{validation.id}"
+            "Click on the following link to update password:" + 
+            password_reset_link(request, encoded_string)
         )
-        if send_password_reset_mail(link):
+        if send_password_reset_mail(user.email, link):
             mc("Password reset link has been sent to your email address ")
         else:
             mc("Unable to send email contact administrator")
@@ -254,15 +336,17 @@ def reset_unknown_user_password():
 
 
 @bp.post("/password-reset-unknown/<val_id>")
-def reset_password_using_validation_id(val_id: str):
-    
+def reset_password_using_validation_id(val_id: str):    
     try:
-        validation: Validation = db_session.query(Validation).get({"id":val_id})
+        
+        decode_data = decode_string(val_id)
+        
+        validation: Validation = db_session.query(Validation).get({"id": decode_data.get("validation_id")})
         if not validation or not validation.active:
             raise ValueError("Invalid validation ID")
         
         password = request.json.get("password")
-        email = request.json.get("email")
+        email = decode_data.get('email')
         if not password or not email:
             return jsonify(message="Invalid email and password details"), 400
         
@@ -293,3 +377,19 @@ def reset_password_using_validation_id(val_id: str):
     
     return jsonify(message="Password reset successfully"), 202
 
+
+
+@bp.delete("/delete")
+@jwt_required(fresh=True)
+def soft_delete_user():
+    """
+    Soft delete a user.
+    """
+    
+    if not current_user.active:
+        return jsonify(message="User already deleted"), 302
+     
+    current_user.active = False
+    db_session.add(current_user)
+    db_session.commit()
+    return jsonify(message=f"User {current_user.username} successfully deleted"), 302

@@ -1,15 +1,16 @@
 import os
 from datetime import timedelta
+
+from dotenv import load_dotenv
 from flask import (
     Flask, g, 
     redirect, url_for, 
     render_template, session
 )
-from flask_mail import Mail, Message
-from dotenv import load_dotenv
+from flask_caching import Cache
+from flask_mail import Mail
 from flask_jwt_extended import JWTManager
 from sqlalchemy import text
-
 
 load_dotenv()
 
@@ -22,6 +23,7 @@ from . import settings
 
 mail = Mail()
 jwt = JWTManager()
+from .cache import cache
 
 # app factory function
 def create_app(test_config=None):
@@ -67,6 +69,14 @@ def create_app(test_config=None):
     app.config['MAIL_DEFAULT_SENDER']  = settings.MAIL_DEFAULT_SENDER
     mail.init_app(app)
     
+    
+    # Cache configurations
+    app.config.from_mapping({
+        "CACHE_TYPE": settings.CACHE_TYPE,  # Flask-Caching related configs
+        "CACHE_DEFAULT_TIMEOUT": int(settings.CACHE_DEFAULT_TIMEOUT),
+        "CACHE_DIR": settings.CACHE_DIR
+    })
+    cache.init_app(app)
     
     @jwt.user_identity_loader
     def user_identity_lookup(user):

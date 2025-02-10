@@ -8,11 +8,11 @@ from ..models.user import User
 
 simple_crud_api = import_module("simple_crud_api")
 
-def send_account_activation_mail(message):
+def send_account_activation_mail(recipients: str, message: str):
     try:
         msg = Message(
         'Flask: User account activation',
-        recipients=['nitish136900kushwaha@gmail.com'],
+        recipients=[recipients],
         body=message
         )
         simple_crud_api.mail.send(msg)
@@ -21,11 +21,11 @@ def send_account_activation_mail(message):
     except Exception as e:
         return False
 
-def send_password_reset_mail(message):
+def send_password_reset_mail(recipients: str, message: str):
     try:
         msg = Message(
         'Flask: Password reset',
-        recipients=['nitish136900kushwaha@gmail.com'],
+        recipients=[recipients],
         body=message
         )
         simple_crud_api.mail.send(msg)
