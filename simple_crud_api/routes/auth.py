@@ -15,7 +15,9 @@ from flask_jwt_extended import (
     create_refresh_token,
     jwt_required,
 )
+import pyotp
 
+from .. import settings
 from ..serializer import (
     UserRegisterSerializer, 
     UserLoginSerializer,
@@ -73,10 +75,14 @@ class RegisterView(MethodView):
     
     def otp(self, user: User):
         
-        # set otp in cache
-        cache.set(f"{user.username}_otp", self.default_opt)
+        totp = pyotp.TOTP('base32secret3232', interval=300)
+        user_otp = totp.now()
         
-        mail_message = f"You OTP for activating the account is: {self.default_opt}"
+        # set totp instance in cache
+        # send the OTP to user via mail
+        cache.set(f"{user.username}_otp", (user, totp))
+        
+        mail_message = f"You OTP for activating the account is: {user_otp}"
         if send_account_activation_mail(user.email, mail_message):
             self.mc("OTP has been sent the your email address")
         else:
@@ -159,13 +165,26 @@ class AccountActivateOTPView(MethodView):
         if not username or not user_otp:
             return jsonify(message="Required username and otp"), 200
         
-        otp = cache.get(f"{username}_otp")
+        # get totp instance
+        cache_get_output = cache.get(f"{username}_otp")
         
-        if not otp:
+        try:
+            user, totp = cache_get_output
+        except Exception as e:
+            return jsonify(message="OTP expired"), 400
+        
+        if not totp:
             return jsonify(message="OTP not found, user account already activated.")
         
-        if otp == user_otp:
+        if totp.verify(user_otp):
+            
+            # activating user account
+            user.account_activation = True
+            db_session.add(user)
+            db_session.commit()
+            
             cache.delete(f"{username}_otp")
+            
             return jsonify(message="User successfully activated"), 200
         
         return jsonify(message="Incorrect OTP"), 400
