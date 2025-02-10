@@ -72,9 +72,9 @@ def create_app(test_config=None):
     
     # Cache configurations
     app.config.from_mapping({
-        "CACHE_TYPE": "FileSystemCache",  # Flask-Caching related configs
-        "CACHE_DEFAULT_TIMEOUT": 300,
-        "CACHE_DIR": "/tmp"
+        "CACHE_TYPE": settings.CACHE_TYPE,  # Flask-Caching related configs
+        "CACHE_DEFAULT_TIMEOUT": int(settings.CACHE_DEFAULT_TIMEOUT),
+        "CACHE_DIR": settings.CACHE_DIR
     })
     cache.init_app(app)
     

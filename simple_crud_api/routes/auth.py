@@ -75,14 +75,19 @@ class RegisterView(MethodView):
     
     def otp(self, user: User):
         
-        totp = pyotp.TOTP('base32secret3232', interval=300)
+        totp = pyotp.TOTP('base32secret3232', interval=int(settings.CACHE_DEFAULT_TIMEOUT))
         user_otp = totp.now()
         
         # set totp instance in cache
         # send the OTP to user via mail
         cache.set(f"{user.username}_otp", (user, totp))
         
-        mail_message = f"You OTP for activating the account is: {user_otp}"
+        encoded_data = encode_string(username=user.username)
+        
+        mail_message = (
+            f"Click on the following link to verify the OTP: {account_activation_otp(request, encoded_data)}\n"
+            f"You OTP for activating the account is: {user_otp}"
+        )
         if send_account_activation_mail(user.email, mail_message):
             self.mc("OTP has been sent the your email address")
         else:
@@ -158,17 +163,20 @@ class AccountActivateView(MethodView):
         return jsonify(message="User account successfully activated")
 
 class AccountActivateOTPView(MethodView):
-    def post(self):
-        username = request.json.get('username')
+    def post(self, otp_verify: str):
+        
+        decoded_data = decode_string(otp_verify)
+        username = decoded_data.get('username')
+        
+        # username = request.json.get('username')
         user_otp = request.json.get("otp")
         
         if not username or not user_otp:
             return jsonify(message="Required username and otp"), 200
         
-        # get totp instance
-        cache_get_output = cache.get(f"{username}_otp")
-        
+        # get user and totp instance from cache
         try:
+            cache_get_output = cache.get(f"{username}_otp")
             user, totp = cache_get_output
         except Exception as e:
             return jsonify(message="OTP expired"), 400
@@ -232,7 +240,7 @@ def register_api(app: Blueprint, model: User, name: str, view_class=None):
 # Method views register
 register_api(bp, User, 'register', RegisterView)
 register_api(bp, User, 'login', LoginView)
-bp.add_url_rule("/otp", view_func=AccountActivateOTPView.as_view("user-activation-otp"))
+bp.add_url_rule("/otp/<otp_verify>", view_func=AccountActivateOTPView.as_view("user-activation-otp"))
 bp.add_url_rule("/register/<int:user_id>/<act_id>", view_func=AccountActivateView.as_view("user-activation"))
 
 

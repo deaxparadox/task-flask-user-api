@@ -24,3 +24,7 @@ MAIL_TLS_PORT = os.environ.get('MAIL_TLS_PORT')
 MAIL_USE_SSL = True
 MAIL_SSL_PORT = os.environ.get('MAIL_SSL_PORT')
 MAIL_DEFAULT_SENDER = os.environ.get("MAIL_USERNAME")
+
+CACHE_TYPE = os.environ.get('CACHE_TYPE')
+CACHE_DEFAULT_TIMEOUT = os.environ.get('CACHE_DEFAULT_TIMEOUT')
+CACHE_DIR = os.environ.get('CACHE_DIR')

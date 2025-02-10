@@ -13,8 +13,9 @@ def account_activation_link(request: Request, user_model):
 def password_reset_link(request: Request, encoded_string: str):
     return f"{request.scheme}://{":".join([str(x) for x in request.server])}/api/auth/password-reset-unknown/{encoded_string}"
 
-def account_activation_otp(otp: str):
-    return f"Your OTP for activating the account it: {otp}"
+def account_activation_otp(request: Request, encoded_string):
+    return f"{request.scheme}://{":".join([str(x) for x in request.server])}/api/auth/otp/{encoded_string}"
+        
 
 
 def encode_string(**kargs) -> str:
