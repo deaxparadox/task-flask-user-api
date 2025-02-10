@@ -192,6 +192,9 @@ class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
         if not task:
             return jsonify(message="Task not found"), 400
         
+        if self.current_user.role == UserType.Employee:
+            return jsonify(message="User not authorized to assign task."), 401
+        
         if self.current_user.role == UserType.Manager:
             if self.checked_user.role == UserType.TeamLead:
                 task.assigned_by_team_lead_id = self.checked_user.id
