@@ -44,8 +44,6 @@ class Task(Base):
     
     def get_response_fields(self):
         all_fields = self.get_fields()
-        # for x in ["assigned_by_manager_id", "assigned_by_team_lead_id", "assigned_to_id"]:
-        #     all_fields.remove(x)
         return all_fields
     
     def to_dict(self):
