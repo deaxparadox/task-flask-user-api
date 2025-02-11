@@ -165,7 +165,7 @@ class TaskGet(MethodView, TaskMixin):
             
             return jsonify(message=data)
         
-        return jsonify(message="Access denied, not authorized to create task"), 401
+        return jsonify(message="Access denied: not authorized"), 403
 
 
 class TaskDetail(MethodView, TaskMixin):
@@ -222,10 +222,10 @@ class TaskDetail(MethodView, TaskMixin):
             
             status = self.get_task_status(serializer.status)
             
-            if not status: jsonify(message="Invalid status"), 400
+            if not status: return jsonify(message="Invalid status"), 400
             
             if status == TaskStatus.PendingReview or status == TaskStatus.Done:
-                return jsonify(message="Employee not authorized to closed the task or send task for review"), 401
+                return jsonify(message="Access denied: not authorized"), 403
             
             if status == TaskStatus.Completed:
                 task.status = TaskStatus.PendingReview
@@ -243,6 +243,7 @@ class TaskDetail(MethodView, TaskMixin):
                 value = getattr(serializer, k)
                 if k == "status": 
                     value = self.get_task_status(value)
+                    if not value: return jsonify(message="Invalid status"), 400
                 if value:
                     setattr(task, k, value)
                     
@@ -257,6 +258,7 @@ class TaskDetail(MethodView, TaskMixin):
                 value = getattr(serializer, k)
                 if k == "status": 
                     value = self.get_task_status(value)
+                    if not value: return jsonify(message="Invalid status"), 400
                 if value:
                     setattr(task, k, value)
                     
@@ -275,21 +277,33 @@ class TaskDetail(MethodView, TaskMixin):
         
         self.set_current_user()
         
+        if self.current_user_role == UserType.Employee:
+            return jsonify(message="Access denied: not authorized"), 403
+        
         try:
             task_id: int = int(task_id)
         except Exception as e:
             return jsonify(message=str(e)), 400
 
         # delete task
-        task = self.get_task(task_id)
+        task: Task = self.get_task(task_id)
         if not task:
             return jsonify(message="task not found"), 400
         
-        task_data = {"task_id": task_id, "description": task.description}
-        self.db_session.delete(task)
-        self.db_session.commit()
-        
-        return jsonify(message="Task ({task_id}:{description}) delete successfully".format(**task_data)), 204
+        if self.current_user_role == UserType.Manager:    
+            task_data = {"task_id": task_id, "description": task.description}
+            self.db_session.delete(task)
+            self.db_session.commit()
+            return jsonify(message="Task ({task_id}:{description}) delete successfully".format(**task_data)), 204
+                
+        if self.current_user_role == UserType.TeamLead:
+            if task.created_by_id == self.current_user.id:
+                task_data = {"task_id": task_id, "description": task.description}
+                self.db_session.delete(task)
+                self.db_session.commit()
+                return jsonify(message="Task ({task_id}:{description}) delete successfully".format(**task_data)), 204
+            return jsonify(message="Access denied: Unauthorized request"), 403
+        return jsonify({}), 500
 
 class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
     
@@ -307,7 +321,7 @@ class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
         self.set_current_user()
         
         if self.current_user.role == UserType.Employee:
-            return jsonify(message="User not authorized to assign task."), 401
+            return jsonify(message="Access denied: not authorized"), 403
         
         try:
             task_id, user_id = int(task_id), int(user_id)
