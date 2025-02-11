@@ -48,21 +48,21 @@ class User(Base):
         passive_deletes=True,
         back_populates="user"
     )
-    task_assigned_by_manager = relationship(
+    task_created_by = relationship(
         "Task",
-        foreign_keys="Task.assigned_by_manager_id", 
+        foreign_keys="Task.created_by_id", 
         uselist=False,
         cascade="save-update",
         passive_deletes=True,
-        back_populates="assigned_by_manager"
+        back_populates="created_by"
     )
-    task_assigned_by_team_lead = relationship(
+    task_assigned_by = relationship(
         "Task",
-        foreign_keys="Task.assigned_by_team_lead_id", 
+        foreign_keys="Task.assigned_by_id", 
         uselist=False,
         cascade="save-update",
         passive_deletes=True,
-        back_populates="assigned_by_team_lead"
+        back_populates="assigned_by"
     )
     task_received = relationship(
         "Task",

@@ -22,6 +22,7 @@ from ..serializer.task import (
 from ..utils.mixins import UserVerifyMixin
 from ..utils.user import UserType
 
+
 bp = Blueprint("task" , __name__, url_prefix="/api/task")
 
 
@@ -29,13 +30,13 @@ class TaskMixin:
     
     def get_manager_task(self, task_id: int | None = None):
         if task_id:
-            return db_session.query(self.task_model).filter_by(id=task_id, assigned_by_manager_id=self.current_user.id).one_or_none()
-        return db_session.query(self.task_model).filter_by(assigned_by_manager_id=self.current_user.id).all()
+            return db_session.query(self.task_model).filter_by(id=task_id, created_by_id=self.current_user.id).one_or_none()
+        return db_session.query(self.task_model).filter_by(created_by_id=self.current_user.id).all()
     
     def get_team_lead_task(self, task_id: int | None = None):
         if task_id:
-            return db_session.query(self.task_model).filter_by(id=task_id, assigned_by_team_lead_id=self.current_user.id).one_or_none()
-        return db_session.query(self.task_model).filter_by(assigned_by_team_lead_id=self.current_user.id).all()
+            return db_session.query(self.task_model).filter_by(id=task_id, assigned_by_id=self.current_user.id).one_or_none()
+        return db_session.query(self.task_model).filter_by(assigned_by_id=self.current_user.id).all()
     
     def get_employee_task(self, task_id: int | None = None):
         if task_id:
@@ -43,23 +44,24 @@ class TaskMixin:
         return db_session.query(self.task_model).filter_by(assigned_to_id=self.current_user.id).all()
     
     def get_task(self, task_id: int | None = None):
-        if self.current_user.role == UserType.Manager:
+        if self.current_user_role == UserType.Manager:
             return self.get_manager_task(task_id)
         
-        elif self.current_user.role == UserType.TeamLead:
+        elif self.current_user_role == UserType.TeamLead:
             return self.get_team_lead_task(task_id)
         
-        elif self.current_user.role == UserType.Employee:
+        elif self.current_user_role == UserType.Employee:
             return self.get_employee_task(task_id)
         
     def set_current_user(self):
         self.current_user: User = current_user
+        self.current_user_role: UserType = current_user.role
         
     def build_response_data(self, task: list[Task] | Task):
         data = {
             "user_details": {
                 "user_id": self.current_user.id,
-                "role": self.current_user.role.value
+                "role": self.current_user_role.value
             }
         }
         
@@ -74,14 +76,19 @@ class TaskMixin:
         """
         This function only create task, it `doesn't` save it.
         """
-        task = Task(description=task.description, body=task.body, assigned_by_manager_id=self.current_user.id)
+        task = Task(description=task.description, body=task.body, created_by_id=self.current_user.id)
         return task
     
     def create_team_lead_task(self, task: TaskCreateSerializer):
         """
         This function only create task, it `doesn't` save it.
         """
-        task = Task(description=task.description, body=task.body, assigned_by_team_lead_id=self.current_user.id)
+        task = Task(
+            description=task.description, 
+            body=task.body, 
+            assigned_by_id=self.current_user.id,
+            created_by_id=self.current_user.id
+        )
         return task
     
     def get_task_status(self, status: str):
@@ -242,7 +249,7 @@ class TaskDetail(MethodView, TaskMixin):
             self.db_session.add(task)
             self.db_session.commit()
             
-            return jsonify(message="Task status updated"), 202
+            return jsonify(message="Task updated successfully"), 202
         
         
         if self.current_user.role == UserType.Manager:
@@ -256,7 +263,7 @@ class TaskDetail(MethodView, TaskMixin):
             self.db_session.add(task)
             self.db_session.commit()
             
-            return jsonify(message="Task status updated"), 202
+            return jsonify(message="Task updated successfully"), 202
         
         return jsonify(message="Invalid request"), 404
     
@@ -318,10 +325,10 @@ class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
         
         if self.current_user.role == UserType.Manager:
             if self.checked_user.role == UserType.TeamLead:
-                task.assigned_by_team_lead_id = self.checked_user.id
+                task.assigned_by_id = self.checked_user.id
                 self.db_session.add(task)
                 self.db_session.commit()
-                return jsonify(message=f"Task {task_id} assigned to Team lead {user_id}"), 200
+                return jsonify(message=f"Manager -> Task {task_id} assigned to Team lead {user_id}"), 200
             return jsonify(message=f"Team lead doesn't exist"), 400
         
         if self.current_user.role == UserType.TeamLead:
