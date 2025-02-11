@@ -30,13 +30,13 @@ class Task(Base):
     status = Column(SQLEnum(TaskStatus), default=TaskStatus.NotStarted)
     
     # Team leand or Manager
-    assigned_by_manager_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
-    assigned_by_team_lead_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    created_by_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    assigned_by_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
     # Employee
     assigned_to_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
     
-    assigned_by_manager = relationship("User", foreign_keys=[assigned_by_manager_id], back_populates="task_assigned_by_manager")
-    assigned_by_team_lead = relationship("User", foreign_keys=[assigned_by_team_lead_id], back_populates="task_assigned_by_team_lead")
+    created_by = relationship("User", foreign_keys=[created_by_id], back_populates="task_created_by")
+    assigned_by = relationship("User", foreign_keys=[assigned_by_id], back_populates="task_assigned_by")
     assigned_to = relationship("User", foreign_keys=[assigned_to_id], back_populates="task_received")
     
     def get_fields(self):
@@ -44,8 +44,6 @@ class Task(Base):
     
     def get_response_fields(self):
         all_fields = self.get_fields()
-        # for x in ["assigned_by_manager_id", "assigned_by_team_lead_id", "assigned_to_id"]:
-        #     all_fields.remove(x)
         return all_fields
     
     def to_dict(self):
