@@ -33,8 +33,6 @@ class User(Base):
     account_activation_id = Column(String(36), nullable=True)
     
     # self relation
-    # head_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
-    # head = relationship("User", back_populates="user")
     
     address = relationship(
         "Address", 

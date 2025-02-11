@@ -14,7 +14,11 @@ from ..database import db_session
 from ..models.user import User
 from ..models.task import Task
 from ..models.task import TaskStatus
-from ..serializer.task import TaskCreateSerializer
+from ..serializer.task import (
+    TaskCreateSerializer,
+    TUESerializer,
+    TUMSerializer
+)
 from ..utils.mixins import UserVerifyMixin
 from ..utils.user import UserType
 
@@ -80,8 +84,24 @@ class TaskMixin:
         task = Task(description=task.description, body=task.body, assigned_by_team_lead_id=self.current_user.id)
         return task
     
-    def verify_team_lead(self, user_id):
-        self.chec
+    def get_task_status(self, status: str):
+        if TaskStatus.Completed.value == status:
+            return TaskStatus.Completed
+        elif TaskStatus.Done.value == status:
+            return TaskStatus.Done
+        elif TaskStatus.Inprogress.value == status:
+            return TaskStatus.Inprogress
+        elif TaskStatus.PendingReview.value == status:
+            return TaskStatus.PendingReview
+        elif TaskStatus.NotStarted.value == status:
+            return TaskStatus.NotStarted
+        return None
+    
+    def get_update_serializer(self):
+        if self.current_user.role == UserType.Manager or self.current_user.role == UserType.TeamLead:
+            return TUMSerializer
+        return TUESerializer
+    
 
 class TaskGet(MethodView, TaskMixin):
 
@@ -140,12 +160,14 @@ class TaskGet(MethodView, TaskMixin):
         
         return jsonify(message="Access denied, not authorized to create task"), 401
 
+
 class TaskDetail(MethodView, TaskMixin):
     
     init_every_request = False
     
     def __init__(self, task: Task):
         self.task_model: Task = task
+        self.db_session = db_session
         
     @jwt_required()
     def get(self, task_id: str):
@@ -163,6 +185,90 @@ class TaskDetail(MethodView, TaskMixin):
             return jsonify(data), 404
         
         return  jsonify(data), 302
+    
+    
+    @jwt_required()
+    def put(self, task_id: str):
+        """
+        Update a task
+        """
+        
+        try:
+            task_id=int(task_id)
+        except Exception as e:
+            jsonify(message=str(e)), 400
+        
+        self.set_current_user()
+        
+        try:
+            serializer = self.get_update_serializer()(**request.json)
+        except (AttributeError, TypeError) as e:
+            return jsonify(message=str(e)), 400
+        
+        
+        task = self.get_task(task_id)
+        if not task:
+            return jsonify(message="Task not found"), 404
+        
+        if self.current_user.role == UserType.Employee:
+            # Employee can only update status of the task
+            
+            status = self.get_task_status(serializer.status)
+            
+            if not status: jsonify(message="Invalid status"), 400
+            
+            if status == TaskStatus.PendingReview or status == TaskStatus.Done:
+                return jsonify(message="Employee not authorized to closed the task or send task for review"), 401
+            
+            if status == TaskStatus.Completed:
+                task.status = TaskStatus.PendingReview
+                self.db_session.add(task)
+                self.db_session.commit()
+                return jsonify(message="Task status updated"), 202
+            
+            task.status = status
+            self.db_session.add(task)
+            self.db_session.commit()
+            return jsonify(message="Task status updated"), 202
+        
+        if self.current_user.role == UserType.TeamLead:
+            for k in serializer.__class__.__dict__.get("__match_args__"):
+                value = getattr(serializer, k)
+                if k == "status": 
+                    value = self.get_task_status(value)
+                if value:
+                    setattr(task, k, value)
+                    
+            self.db_session.add(task)
+            self.db_session.commit()
+            
+            return jsonify(message="Task status updated"), 202
+        
+        
+        if self.current_user.role == UserType.Manager:
+            for k in serializer.__class__.__dict__.get("__match_args__"):
+                value = getattr(serializer, k)
+                if k == "status": 
+                    value = self.get_task_status(value)
+                if value:
+                    setattr(task, k, value)
+                    
+            self.db_session.add(task)
+            self.db_session.commit()
+            
+            return jsonify(message="Task status updated"), 202
+        
+        return jsonify(message="Invalid request"), 404
+    
+    def delete(self, task_id: str):
+        """
+        Delete a task.
+        """
+        try:
+            task_id: int = int(task_id)
+        except Exception as e:
+            return jsonify(message=str(e)), 400
+
 
 class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
     
@@ -179,21 +285,22 @@ class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
         
         self.set_current_user()
         
+        if self.current_user.role == UserType.Employee:
+            return jsonify(message="User not authorized to assign task."), 401
+        
         try:
             task_id, user_id = int(task_id), int(user_id)
         except Exception as e:
             return jsonify(message=str(e)), 400
         
         if not self.check_user_by_id(int(user_id)):
-            jsonify(message="User doesnot exists"), 400
-            
+            return jsonify(message="User doesnot exists"), 400
+        
         task: Task = self.get_task(task_id)
         
         if not task:
             return jsonify(message="Task not found"), 400
         
-        if self.current_user.role == UserType.Employee:
-            return jsonify(message="User not authorized to assign task."), 401
         
         if self.current_user.role == UserType.Manager:
             if self.checked_user.role == UserType.TeamLead:
@@ -212,6 +319,7 @@ class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
             return jsonify(message=f"Team lead doesn't exist"), 400
         
         return jsonify(message="Invalid request"), 400
+
 
 bp.add_url_rule("", view_func=TaskGet.as_view("task-all", Task))
 bp.add_url_rule("/<task_id>", view_func=TaskDetail.as_view("task-detail", Task))
