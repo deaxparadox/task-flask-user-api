@@ -5,10 +5,13 @@ from sqlalchemy import (
     Enum,   
     Integer, 
     String,
+    ForeignKey
 )
 from sqlalchemy.orm import relationship
 from simple_crud_api.database import Base
 
+
+from ..models.task import Task
 from ..utils.security.passwd import generate_hashed_password, check_password
 from ..utils.user import UserType
 
@@ -29,6 +32,10 @@ class User(Base):
     account_activation = Column(Boolean, default=False, nullable=True)
     account_activation_id = Column(String(36), nullable=True)
     
+    # self relation
+    # head_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True)
+    # head = relationship("User", back_populates="user")
+    
     address = relationship(
         "Address", 
         uselist=False,
@@ -42,6 +49,30 @@ class User(Base):
         cascade="save-update",
         passive_deletes=True,
         back_populates="user"
+    )
+    task_assigned_by_manager = relationship(
+        "Task",
+        foreign_keys="Task.assigned_by_manager_id", 
+        uselist=False,
+        cascade="save-update",
+        passive_deletes=True,
+        back_populates="assigned_by_manager"
+    )
+    task_assigned_by_team_lead = relationship(
+        "Task",
+        foreign_keys="Task.assigned_by_team_lead_id", 
+        uselist=False,
+        cascade="save-update",
+        passive_deletes=True,
+        back_populates="assigned_by_team_lead"
+    )
+    task_received = relationship(
+        "Task",
+        foreign_keys="Task.assigned_to_id", 
+        uselist=False,
+        cascade="save-update",
+        passive_deletes=True,
+        back_populates="assigned_to"
     )
     
     def __init__(self, username, password, email):

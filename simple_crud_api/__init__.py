@@ -16,7 +16,12 @@ load_dotenv()
 
 from . import settings
 from .models.user import User
-from .routes import auth_user, auth, index
+from .routes import (
+    auth_user, 
+    auth, 
+    index, 
+    task
+)
 from .database import db_session, init_db
 from . import settings
 
@@ -90,6 +95,7 @@ def create_app(test_config=None):
     app.register_blueprint(index.bp)
     app.register_blueprint(auth_user.bp)
     app.register_blueprint(auth.bp)
+    app.register_blueprint(task.bp)
 
     @app.teardown_appcontext
     def shutdown_session(exception=None):

@@ -4,7 +4,7 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-from simple_crud_api.models import user, address, validation
+from simple_crud_api.models import user, address, validation, task
 from simple_crud_api.database import Base
 
 # this is the Alembic Config object, which provides

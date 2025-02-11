@@ -19,7 +19,6 @@ from ..serializer import (
     UserUpdateSerializer,
     AddressUpdateSerializer
 )
-
 from ..utils.message import message_collector
 from ..utils.models import get_fields
 from ..utils.validation import phone_number_validation
