@@ -29,14 +29,15 @@ bp = Blueprint("task" , __name__, url_prefix="/api/task")
 class TaskMixin:
     
     def get_manager_task(self, task_id: int | None = None):
+        # manager will get all task.
         if task_id:
-            return db_session.query(self.task_model).filter_by(id=task_id, created_by_id=self.current_user.id).one_or_none()
-        return db_session.query(self.task_model).filter_by(created_by_id=self.current_user.id).all()
+            return db_session.query(self.task_model).filter_by(id=task_id).one_or_none()
+        return db_session.query(self.task_model).filter_by().all()
     
     def get_team_lead_task(self, task_id: int | None = None):
         if task_id:
-            return db_session.query(self.task_model).filter_by(id=task_id, assigned_by_id=self.current_user.id).one_or_none()
-        return db_session.query(self.task_model).filter_by(assigned_by_id=self.current_user.id).all()
+            return db_session.query(self.task_model).filter_by(id=task_id, created_by_id=self.current_user.id).one_or_none()
+        return db_session.query(self.task_model).filter_by(created_by_id=self.current_user.id).all()
     
     def get_employee_task(self, task_id: int | None = None):
         if task_id:
@@ -58,15 +59,10 @@ class TaskMixin:
         self.current_user_role: UserType = current_user.role
         
     def build_response_data(self, task: list[Task] | Task):
-        data = {
-            "user_details": {
-                "user_id": self.current_user.id,
-                "role": self.current_user_role.value
-            }
-        }
+        data = {}
         
         if isinstance(task, list):
-            data.update({"tasks": [x.to_dict() for x in task]})
+            data.update({"tasks": [x.to_dict() for x in task], "total_task": len(task)})
             return data
         
         data.update({"task": task.to_dict() if task else "Task doesn't exists"})
@@ -85,8 +81,7 @@ class TaskMixin:
         """
         task = Task(
             description=task.description, 
-            body=task.body, 
-            assigned_by_id=self.current_user.id,
+            body=task.body,
             created_by_id=self.current_user.id
         )
         return task
@@ -109,6 +104,12 @@ class TaskMixin:
             return TUMSerializer
         return TUESerializer
     
+    
+    def check_task_created_by_team_lead(self, user_id):
+        """
+        This function receives the user_id from subject task.
+        """
+        return True if self.db_session.query(User).filter_by(id=user_id).one().role == UserType.TeamLead else False
 
 class TaskGet(MethodView, TaskMixin):
 
@@ -328,25 +329,29 @@ class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
         except Exception as e:
             return jsonify(message=str(e)), 400
         
+        # check employee existence before assign a task
+        # and employee should be active
         if not self.check_user_by_id(int(user_id)):
             return jsonify(message="User doesnot exists"), 400
-        
+
         task: Task = self.get_task(task_id)
         
         if not task:
             return jsonify(message="Task not found"), 400
         
-        
         if self.current_user.role == UserType.Manager:
-            if self.checked_user.role == UserType.TeamLead:
-                task.assigned_by_id = self.checked_user.id
-                self.db_session.add(task)
-                self.db_session.commit()
-                return jsonify(message=f"Manager -> Task {task_id} assigned to Team lead {user_id}"), 200
-            return jsonify(message=f"Team lead doesn't exist"), 400
+            # manager can assign to team lead and employee
+            task.assigned_by_id = self.current_user.id
+            task.assigned_to_id = self.checked_user.id
+            self.db_session.add(task)
+            self.db_session.commit()
+            return jsonify(message=f"Manager -> Assigns ask {task_id} assigned to Team lead {user_id}"), 202
         
         if self.current_user.role == UserType.TeamLead:
+            # team lead can assign to Employee
+            
             if self.checked_user.role == UserType.Employee:
+                task.assigned_by_id = self.current_user.id
                 task.assigned_to_id = self.checked_user.id
                 self.db_session.add(task)
                 self.db_session.commit()
