@@ -260,15 +260,29 @@ class TaskDetail(MethodView, TaskMixin):
         
         return jsonify(message="Invalid request"), 404
     
+    @jwt_required()
     def delete(self, task_id: str):
         """
         Delete a task.
         """
+        
+        self.set_current_user()
+        
         try:
             task_id: int = int(task_id)
         except Exception as e:
             return jsonify(message=str(e)), 400
 
+        # delete task
+        task = self.get_task(task_id)
+        if not task:
+            return jsonify(message="task not found"), 400
+        
+        task_data = {"task_id": task_id, "description": task.description}
+        self.db_session.delete(task)
+        self.db_session.commit()
+        
+        return jsonify(message="Task ({task_id}:{description}) delete successfully".format(**task_data)), 204
 
 class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
     
