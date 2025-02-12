@@ -1,7 +1,5 @@
 from importlib import import_module
 
-import click
-from faker import Faker
 from flask import (
     Blueprint,
     jsonify
@@ -13,7 +11,6 @@ from ..utils.user import UserType
 from ..database import db_session
 
 
-fake = Faker()
 password = User.make_passsword("qwerQWER1234")
 
 bp = Blueprint("index", __name__, url_prefix="/")

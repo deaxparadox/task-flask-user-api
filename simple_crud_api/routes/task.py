@@ -142,7 +142,7 @@ class TaskGet(MethodView, TaskMixin):
         try:
             task_serializer = TaskCreateSerializer(**request.json)
         except Exception as e:
-            return jsonify(message=str(e)), 400
+            return jsonify(message="Required fields: 'description' and 'body' for creating task"), 400
         
         # create team lead task
         if self.current_user.role == UserType.TeamLead:
@@ -190,9 +190,9 @@ class TaskDetail(MethodView, TaskMixin):
         
         # not found
         if not task:
-            return jsonify(data), 404
+            return jsonify(message="Task not found"), 404
         
-        return  jsonify(data), 302
+        return  jsonify(message=data), 302
     
     
     @jwt_required()
@@ -211,7 +211,9 @@ class TaskDetail(MethodView, TaskMixin):
         try:
             serializer = self.get_update_serializer()(**request.json)
         except (AttributeError, TypeError) as e:
-            return jsonify(message=str(e)), 400
+            if self.current_user_role == UserType.Employee:
+                return jsonify(message="Required fields: status")
+            return jsonify(message="Accepted fields: status, description, or body"), 400
         
         
         task = self.get_task(task_id)
@@ -268,7 +270,7 @@ class TaskDetail(MethodView, TaskMixin):
             
             return jsonify(message="Task updated successfully"), 202
         
-        return jsonify(message="Invalid request"), 404
+        return jsonify(message="Unhandled request"), 500
     
     @jwt_required()
     def delete(self, task_id: str):
@@ -284,7 +286,7 @@ class TaskDetail(MethodView, TaskMixin):
         try:
             task_id: int = int(task_id)
         except Exception as e:
-            return jsonify(message=str(e)), 400
+            return jsonify(message="Invalid task id"), 400
 
         # delete task
         task: Task = self.get_task(task_id)
@@ -304,7 +306,8 @@ class TaskDetail(MethodView, TaskMixin):
                 self.db_session.commit()
                 return jsonify(message="Task ({task_id}:{description}) delete successfully".format(**task_data)), 204
             return jsonify(message="Access denied: Unauthorized request"), 403
-        return jsonify({}), 500
+        
+        return jsonify(message="Unhandled request"), 500
 
 class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
     
@@ -339,6 +342,9 @@ class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
         if not task:
             return jsonify(message="Task not found"), 400
         
+        if isinstance(task.assigned_by_id, int):
+            return jsonify(message='Task already assigned'), 400
+        
         if self.current_user.role == UserType.Manager:
             # manager can assign to team lead and employee
             task.assigned_by_id = self.current_user.id
@@ -349,16 +355,16 @@ class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
         
         if self.current_user.role == UserType.TeamLead:
             # team lead can assign to Employee
-            
             if self.checked_user.role == UserType.Employee:
                 task.assigned_by_id = self.current_user.id
                 task.assigned_to_id = self.checked_user.id
                 self.db_session.add(task)
                 self.db_session.commit()
                 return jsonify(message=f"Task {task_id} assigned to Employee {user_id}"), 200
-            return jsonify(message=f"Team lead doesn't exist"), 400
+            
+            return jsonify(message=f"Invalid request: Team lead can only assign task to employee"), 400
         
-        return jsonify(message="Invalid request"), 400
+        return jsonify(message="Invalid request: request flow out of bound"), 500
 
 
 bp.add_url_rule("", view_func=TaskGet.as_view("task-all", Task))

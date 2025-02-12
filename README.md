@@ -16,27 +16,31 @@ endpoint_prefix = `/api/auth`
 
 #### `/task` : GET
 
-- Manager and Team lead will get all the tasks they created, and will also get tasks which are completed by employee, and are pending for review by task creator. 
+- Manager will get all the tasks.
+- Team lead will get all the tasks they created.
 - Employee will get task they are assigned either by Manager or Team Lead.
 
 #### `/task` : POST
 
-- Manager and Team lead will get all the tasks they created, and will also get tasks which are completed by employee, and are pending for review by task creator. 
-- Employee will get task they are assigned either by Manager or Team Lead.
+- Manager can create task.
+- Team lead can create task.
 
 #### `/task/{id}` : GET
 
-- Get details of specific task.
+- Manager can see details of any task.
+- Team lead can see details of its tasks only.
+- Employee can see details of assigned tasks.
 
 #### `/task/{id}/update` : PUT
 
 - Update the details of task.
 - Task can only be updatd by manager and team lead.
-- Employee can update the status of the task assigned only.
+- Employee can update the following status, 'started', 'in-progress', 'completed', of the task assigned only.
 
 #### `/task/{id}/delete` : DELETE
 
 - Task can only be deleted by Manager and Team lead.
+- Manager can delete any task.
 
 #### `/task/{id}/assign/{user_id}` : GET
 
