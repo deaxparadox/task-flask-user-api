@@ -1,5 +1,7 @@
 # task-flask-user-api
 
+The following project is the the task management API, implemented in Flask.
+
 endpoint_prefix = `/api/auth`
 
 ### Task endpoints
