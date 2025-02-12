@@ -10,6 +10,6 @@ class UserVerifyMixin:
     
     def check_user_by_id(self, user_id: int) -> bool:
         self.checked_user = self.db_session.query(self.user_model).where(self.user_model.id==user_id).one_or_none()
-        if self.checked_user:
+        if self.checked_user and self.checked_user.active:
             return True
         return False

@@ -20,7 +20,8 @@ from .routes import (
     auth_user, 
     auth, 
     index, 
-    task
+    task,
+    manager
 )
 from .database import db_session, init_db
 from . import settings
@@ -96,6 +97,7 @@ def create_app(test_config=None):
     app.register_blueprint(auth_user.bp)
     app.register_blueprint(auth.bp)
     app.register_blueprint(task.bp)
+    app.register_blueprint(manager.bp)
 
     @app.teardown_appcontext
     def shutdown_session(exception=None):
