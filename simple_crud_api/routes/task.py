@@ -28,7 +28,9 @@ bp = Blueprint("task" , __name__, url_prefix="/api/task")
 
 class TaskMixin:
     
-    def get_manager_task(self, task_id: int | None = None):
+    task_exists = False
+    
+    def get_all_task(self, task_id: int | None = None):
         # manager will get all task.
         if task_id:
             return db_session.query(self.task_model).filter_by(id=task_id).one_or_none()
@@ -36,17 +38,25 @@ class TaskMixin:
     
     def get_team_lead_task(self, task_id: int | None = None):
         if task_id:
-            return db_session.query(self.task_model).filter_by(id=task_id, created_by_id=self.current_user.id).one_or_none()
+            task = db_session.query(self.task_model).filter_by(id=task_id).one_or_none()
+            if task:
+                self.task_exists = True
+                return task if task.created_by_id == self.current_user.id else None
+            return None
         return db_session.query(self.task_model).filter_by(created_by_id=self.current_user.id).all()
     
     def get_employee_task(self, task_id: int | None = None):
         if task_id:
-            return db_session.query(self.task_model).filter_by(id=task_id, assigned_to_id=self.current_user.id).one_or_none()
+            task = db_session.query(self.task_model).filter_by(id=task_id).one_or_none()
+            if task:
+                self.task_exists = True
+                return task if task.assigned_to_id == self.current_user.id else None
+            return None
         return db_session.query(self.task_model).filter_by(assigned_to_id=self.current_user.id).all()
     
     def get_task(self, task_id: int | None = None):
         if self.current_user_role == UserType.Manager:
-            return self.get_manager_task(task_id)
+            return self.get_all_task(task_id)
         
         elif self.current_user_role == UserType.TeamLead:
             return self.get_team_lead_task(task_id)
@@ -164,14 +174,12 @@ class TaskGet(MethodView, TaskMixin):
             
             data = self.build_response_data(task)
             
-            return jsonify(message=data)
+            return jsonify(message=data), 201
         
-        return jsonify(message="Access denied: not authorized"), 403
+        return jsonify(message="Access denied"), 403
 
 
 class TaskDetail(MethodView, TaskMixin):
-    
-    init_every_request = False
     
     def __init__(self, task: Task):
         self.task_model: Task = task
@@ -186,11 +194,19 @@ class TaskDetail(MethodView, TaskMixin):
         except Exception as e:
             return jsonify(message="Invalid task ID"), 400  
         
-        data = self.build_response_data(task)
+        print(f"\n{task} {self.task_exists}\n\n")
         
-        # not found
+        # no task
         if not task:
-            return jsonify(message="Task not found"), 404
+            # with existence 
+            if self.task_exists:
+                return jsonify(message="You don't have permission to view task details"), 403
+        
+            # with no existence
+            if not self.task_exists:
+                return jsonify(message="Task not found"), 404
+        
+        data = self.build_response_data(task)
         
         return  jsonify(message=data), 302
     
@@ -212,13 +228,21 @@ class TaskDetail(MethodView, TaskMixin):
             serializer = self.get_update_serializer()(**request.json)
         except (AttributeError, TypeError) as e:
             if self.current_user_role == UserType.Employee:
-                return jsonify(message="Required fields: status")
+                return jsonify(message="Employee can update status only"), 400
             return jsonify(message="Accepted fields: status, description, or body"), 400
         
         
         task = self.get_task(task_id)
+        
+        # no task
         if not task:
-            return jsonify(message="Task not found"), 404
+            # with existence 
+            if self.task_exists:
+                return jsonify(message="You don't have permission to update task"), 403
+        
+            # with no existence
+            if not self.task_exists:
+                return jsonify(message="Task not found"), 404
         
         if self.current_user.role == UserType.Employee:
             # Employee can only update status of the task
@@ -228,7 +252,7 @@ class TaskDetail(MethodView, TaskMixin):
             if not status: return jsonify(message="Invalid status"), 400
             
             if status == TaskStatus.PendingReview or status == TaskStatus.Done:
-                return jsonify(message="Access denied: not authorized"), 403
+                return jsonify(message="Access denied"), 403
             
             if status == TaskStatus.Completed:
                 task.status = TaskStatus.PendingReview
@@ -281,7 +305,7 @@ class TaskDetail(MethodView, TaskMixin):
         self.set_current_user()
         
         if self.current_user_role == UserType.Employee:
-            return jsonify(message="Access denied: not authorized"), 403
+            return jsonify(message="Access denied"), 403
         
         try:
             task_id: int = int(task_id)
@@ -290,8 +314,16 @@ class TaskDetail(MethodView, TaskMixin):
 
         # delete task
         task: Task = self.get_task(task_id)
+        
+        # no task
         if not task:
-            return jsonify(message="task not found"), 400
+            # with existence 
+            if self.task_exists:
+                return jsonify(message="You don't have permission to delete"), 403
+        
+            # with no existence
+            if not self.task_exists:
+                return jsonify(message="Task not found"), 404
         
         if self.current_user_role == UserType.Manager:    
             task_data = {"task_id": task_id, "description": task.description}
@@ -325,7 +357,7 @@ class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
         self.set_current_user()
         
         if self.current_user.role == UserType.Employee:
-            return jsonify(message="Access denied: not authorized"), 403
+            return jsonify(message="Access denied"), 403
         
         try:
             task_id, user_id = int(task_id), int(user_id)
@@ -339,8 +371,15 @@ class TaskAssign(MethodView, TaskMixin, UserVerifyMixin):
 
         task: Task = self.get_task(task_id)
         
+        # no task
         if not task:
-            return jsonify(message="Task not found"), 400
+            # with existence 
+            if self.task_exists:
+                return jsonify(message="You don't have permission to view task details"), 403
+        
+            # with no existence
+            if not self.task_exists:
+                return jsonify(message="Task not found"), 404
         
         if isinstance(task.assigned_by_id, int):
             return jsonify(message='Task already assigned'), 400
